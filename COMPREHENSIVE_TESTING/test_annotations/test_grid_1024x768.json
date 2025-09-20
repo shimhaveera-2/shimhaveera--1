@@ -1,0 +1,33 @@
+{
+  "image_filename": "test_grid_1024x768.jpg",
+  "image_width": 1024,
+  "image_height": 768,
+  "annotations": [
+    {
+      "id": 1,
+      "type": "detection",
+      "class_name": "grid_cell",
+      "class_id": 0,
+      "bbox": [
+        100,
+        100,
+        100,
+        100
+      ],
+      "confidence": 1.0
+    },
+    {
+      "id": 2,
+      "type": "detection",
+      "class_name": "grid_cell",
+      "class_id": 0,
+      "bbox": [
+        824,
+        568,
+        100,
+        100
+      ],
+      "confidence": 1.0
+    }
+  ]
+}
