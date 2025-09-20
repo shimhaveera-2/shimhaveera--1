@@ -95,6 +95,7 @@ class ReleaseCreate(BaseModel):
     include_annotations: bool = True
     verified_only: bool = False
     output_format: str = "original"  # Image format: original, jpg, png, webp, bmp, tiff
+    preview_data: Optional[dict] = None  # Preview data with calculated split counts
 
 class DatasetRebalanceRequest(BaseModel):
     train_count: int
@@ -542,9 +543,35 @@ def create_release(payload: ReleaseCreate, db: Session = Depends(get_db)):
             "project_id": project_id
         })
         
-        total_original, split_counts = calculate_total_image_counts(db, payload.dataset_ids)
-        total_augmented = total_original * (payload.multiplier - 1) if payload.multiplier > 1 else 0
-        final_image_count = total_original * payload.multiplier
+        # Use preview data if available (frontend already calculated correctly)
+        if payload.preview_data and payload.preview_data.get('splitBreakdown'):
+            # Use frontend-calculated split counts (includes augmentation)
+            split_breakdown = payload.preview_data['splitBreakdown']
+            split_counts = {
+                "train": split_breakdown.get('train', 0),
+                "val": split_breakdown.get('val', 0), 
+                "test": split_breakdown.get('test', 0)
+            }
+            total_original = payload.preview_data.get('baseImages', 0)
+            final_image_count = payload.preview_data.get('totalImages', 0)
+            total_augmented = final_image_count - total_original
+            class_count = payload.preview_data.get('totalClasses', 0)  # nc - number of classes
+            
+            # Debug logging to see what we're getting
+            logger.info("operations.preview_data", f"Using preview data for release counts", "preview_data_usage", {
+                "split_breakdown": split_breakdown,
+                "total_original": total_original,
+                "final_image_count": final_image_count,
+                "total_augmented": total_augmented,
+                "class_count": class_count,
+                "split_counts": split_counts
+            })
+        else:
+            # Fallback to old calculation method
+            total_original, split_counts = calculate_total_image_counts(db, payload.dataset_ids)
+            total_augmented = total_original * (payload.multiplier - 1) if payload.multiplier > 1 else 0
+            final_image_count = total_original * payload.multiplier
+            class_count = 0  # Will be calculated later if needed
         
         logger.info("operations.operations", f"Image counts calculated", "image_count_calculation_success", {
             "total_original": total_original,
@@ -617,6 +644,7 @@ def create_release(payload: ReleaseCreate, db: Session = Depends(get_db)):
             train_image_count=split_counts.get("train", 0),
             val_image_count=split_counts.get("val", 0),
             test_image_count=split_counts.get("test", 0),
+            class_count=class_count,  # ✅ FIXED: Set nc (number of classes) from preview data
             model_path=relative_model_path,
             created_at=datetime.now(),
         )

@@ -211,14 +211,24 @@ class ReleaseController:
     # -----------------------------------------------------------
     # Utility: Calculate split-counts directly from DB
     # -----------------------------------------------------------
-    def _calculate_split_counts(self, dataset_ids: List[str]) -> Tuple[int, Dict[str, int]]:
-        """Aggregate train/val/test counts across datasets."""
+    def _calculate_split_counts(self, dataset_ids: List[str], images_per_original: int = 1) -> Tuple[int, Dict[str, int]]:
+        """
+        Aggregate train/val/test counts across datasets including augmented images.
+        
+        Args:
+            dataset_ids: List of dataset IDs to include
+            images_per_original: Number of total images per original (1 original + N augmented)
+        
+        Returns:
+            Tuple of (total_original_count, split_counts_including_augmented)
+        """
         split_counts = {"train": 0, "val": 0, "test": 0}
         total_original = 0
 
         if not dataset_ids:
             return total_original, split_counts
 
+        # Get base image counts per split
         results = (
             self.db.query(Image.split_section, func.count(Image.id))
             .filter(Image.dataset_id.in_(dataset_ids), Image.is_labeled == True)
@@ -226,12 +236,34 @@ class ReleaseController:
             .all()
         )
 
-        for section, count in results:
+        logger.info("operations.release", f"Calculating split counts with augmentation multiplier: {images_per_original}", "split_counts_calculation", {
+            'dataset_ids': dataset_ids,
+            'images_per_original': images_per_original,
+            'base_results_count': len(results)
+        })
+
+        for section, base_count in results:
             key = section or "train"
             if key not in split_counts:
                 split_counts[key] = 0
-            split_counts[key] += count
-            total_original += count
+            
+            # FIXED: Multiply base count by images_per_original to include augmented images
+            total_count_with_augmentation = base_count * images_per_original
+            split_counts[key] += total_count_with_augmentation
+            total_original += base_count  # Keep original count for reference
+            
+            logger.info("operations.release", f"Split {key}: {base_count} base images → {total_count_with_augmentation} total (with augmentation)", "split_count_calculated", {
+                'split_section': key,
+                'base_count': base_count,
+                'total_with_augmentation': total_count_with_augmentation,
+                'multiplier': images_per_original
+            })
+
+        logger.info("operations.release", f"Final split counts: {split_counts} (total original: {total_original})", "split_counts_final", {
+            'split_counts': split_counts,
+            'total_original': total_original,
+            'images_per_original': images_per_original
+        })
 
         return total_original, split_counts
 
@@ -813,8 +845,8 @@ class ReleaseController:
                 release.final_image_count = total_generated + (len(image_paths) if config.include_original else 0)
                 release.model_path = PathManager().get_project_relative_path(output_dir)
 
-                # NEW: Compute and store accurate train/val/test split counts
-                _orig_total, split_counts = self._calculate_split_counts(config.dataset_ids)
+                # FIXED: Compute and store accurate train/val/test split counts including augmented images
+                _orig_total, split_counts = self._calculate_split_counts(config.dataset_ids, config.images_per_original)
                 release.train_image_count = split_counts.get("train", 0)
                 release.val_image_count = split_counts.get("val", 0)
                 release.test_image_count = split_counts.get("test", 0)
