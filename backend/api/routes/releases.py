@@ -3287,10 +3287,23 @@ def create_complete_release_zip(
                                         print(f"🎯 RELEASES.PY: Using ADVANCED transformation system for annotations!")
                                         print(f"   📊 Tracking data: {transformation_tracking_data}")
                                         # Apply same transformations to annotations that were applied to image
+                                        print(f"🔍 DEBUG: About to transform {len(img_data['annotations'])} annotations")
+                                        print(f"   First annotation type: {type(img_data['annotations'][0]) if img_data['annotations'] else 'None'}")
+                                        if img_data['annotations']:
+                                            ann = img_data['annotations'][0]
+                                            print(f"   First annotation attrs: {[attr for attr in dir(ann) if not attr.startswith('_')]}")
+                                            if hasattr(ann, 'x_min'):
+                                                print(f"   First annotation coords: ({ann.x_min}, {ann.y_min}, {ann.x_max}, {ann.y_max})")
+                                        
                                         transformed_annotations = apply_transformations_to_annotations(
                                             annotations=img_data["annotations"],
                                             tracking_data=transformation_tracking_data
                                         )
+                                        
+                                        print(f"🔍 DEBUG: Transformation result: {len(transformed_annotations)} annotations")
+                                        if transformed_annotations:
+                                            ann = transformed_annotations[0]
+                                            print(f"   First transformed annotation: ({ann.x_min}, {ann.y_min}, {ann.x_max}, {ann.y_max})")
                                         logger.debug("operations.transformations", f"Using transformed annotations for augmented labels", "transformed_annotations_used", {
                                             'original_count': len(img_data["annotations"]),
                                             'transformed_count': len(transformed_annotations),
@@ -3314,8 +3327,23 @@ def create_complete_release_zip(
                                         if label_mode == "yolo_detection":
                                             from core.annotation_transformer import transform_detection_annotations_to_yolo, _debug_yolo_dump
                                             
+                                            print(f"🔍 DEBUG: About to call _debug_yolo_dump")
+                                            print(f"   aug_filename: {aug_filename}")
+                                            print(f"   transformed_annotations count: {len(transformed_annotations)}")
+                                            print(f"   img_w, img_h: {img_w}, {img_h}")
+                                            if transformed_annotations:
+                                                ann = transformed_annotations[0]
+                                                print(f"   First annotation: {type(ann)} - {getattr(ann, 'x_min', 'NO_X_MIN')}")
+                                            
                                             # 🔍 DEBUG: Call debug function before YOLO conversion
                                             det_lines, seg_lines = _debug_yolo_dump(aug_filename, transformed_annotations, img_w, img_h)
+                                            
+                                            print(f"🔍 DEBUG: _debug_yolo_dump returned:")
+                                            print(f"   det_lines count: {len(det_lines)}")
+                                            print(f"   seg_lines count: {len(seg_lines)}")
+                                            if det_lines:
+                                                print(f"   First det_line: {det_lines[0]}")
+                                            
                                             label_content = "\n".join(det_lines)
                                             
                                         else:  # yolo_segmentation
